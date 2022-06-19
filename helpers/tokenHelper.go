@@ -85,7 +85,7 @@ func UpdateRefreshToken(signedRefreshToken string, id uuid.UUID) {
 }
 
 func ValidateToken(signedToken string) (claims *Claims, msg string) {
-	token, err := jwt.ParseWithClaims(
+	token, _ := jwt.ParseWithClaims(
 		signedToken,
 		&Claims{},
 		func(token *jwt.Token) (interface{}, error) {
@@ -94,11 +94,6 @@ func ValidateToken(signedToken string) (claims *Claims, msg string) {
 	)
 
 	message := ""
-
-	//if err != nil {
-	//	message = err.Error()
-	//	return nil, message
-	//}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
@@ -110,7 +105,7 @@ func ValidateToken(signedToken string) (claims *Claims, msg string) {
 	defer cancel()
 
 	var foundUser models.User
-	err = userCollection.FindOne(ctx, bson.M{"_id": claims.ID.String()}).Decode(&foundUser)
+	err := userCollection.FindOne(ctx, bson.M{"_id": claims.ID.String()}).Decode(&foundUser)
 	if err != nil {
 		message = "User with this ID doesn't exist"
 		return nil, message

@@ -25,14 +25,7 @@ func SignUp() gin.HandlerFunc {
 		defer cancel()
 		var user models.User
 
-		//if err := c.BindJSON(&user); err != nil {
-		//	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		//	return
-		//}
-
 		user.ID = uuid.New().String()
-		//_, refreshToken := jwtHelper.GenerateAllTokens(user.ID)
-		//user.Refresh_token = &refreshToken
 
 		resultInsertionNumber, insertErr := userCollection.InsertOne(ctx, user)
 		if insertErr != nil {

@@ -14,7 +14,6 @@ import (
 
 func Authentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		//clientToken := c.Request.Header.Get("token")
 		clientCookie, err := c.Request.Cookie("token")
 		if err != nil {
 			location := url.URL{Path: "/auth/signin"}
