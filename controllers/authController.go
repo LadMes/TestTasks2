@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/LadMes/TestTasks2/database"
-	jwtHelper "github.com/LadMes/TestTasks2/helpers"
+	"github.com/LadMes/TestTasks2/helpers"
 	"github.com/LadMes/TestTasks2/models"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -55,48 +55,63 @@ func SignIn() gin.HandlerFunc {
 			return
 		}
 
-		expiresAt := time.Now().Add(20 * time.Minute)
 		userID, err := uuid.Parse(foundUser.ID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "ID error"})
 			return
 		}
-		token, refreshToken := jwtHelper.GenerateAllTokens(userID)
-		jwtHelper.UpdateRefreshToken(refreshToken, userID)
 
-		http.SetCookie(c.Writer, &http.Cookie{
-			Name:    "token",
-			Value:   token,
-			Expires: expiresAt,
-			Path:    "/",
-		})
+		token, refreshToken := helpers.GenerateAllTokens(userID)
+		helpers.UpdateRefreshToken(refreshToken, userID)
+
+		SetAllCookies(c, token, refreshToken)
+
 		c.JSON(http.StatusOK, foundUser)
 	}
 }
 
-func Refresh(id uuid.UUID, c *gin.Context) {
+func Refresh(userInfoFromCookie models.User, c *gin.Context) {
 	var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
 	var foundUser models.User
-	err := userCollection.FindOne(ctx, bson.M{"_id": id.String()}).Decode(&foundUser)
+	err := userCollection.FindOne(ctx, bson.M{"_id": userInfoFromCookie.ID}).Decode(&foundUser)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "User with this ID doesn't exist"})
 		return
 	}
-	expiresAt := time.Now().Add(20 * time.Minute)
+
+	comparison := helpers.CompareRefreshTokens(foundUser.Refresh_token, []byte(userInfoFromCookie.Refresh_token))
+	if !comparison {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh token is not the same"})
+	}
+
 	userID, err := uuid.Parse(foundUser.ID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "ID error"})
 		return
 	}
-	token, refreshToken := jwtHelper.GenerateAllTokens(userID)
-	jwtHelper.UpdateRefreshToken(refreshToken, userID)
+	token, refreshToken := helpers.GenerateAllTokens(userID)
+	helpers.UpdateRefreshToken(refreshToken, userID)
+
+	SetAllCookies(c, token, refreshToken)
+}
+
+func SetAllCookies(c *gin.Context, token string, refreshToken string) {
+	//tokenExpiresAt := time.Now().Add(models.AccessTokenMultiplier * time.Minute)
+	refreshTokenExpiresAt := time.Now().Add(models.RefreshTokenMultiplier * time.Minute)
 
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:    "token",
 		Value:   token,
-		Expires: expiresAt,
+		Expires: refreshTokenExpiresAt,
+		Path:    "/",
+	})
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:    "refreshToken",
+		Value:   refreshToken,
+		Expires: refreshTokenExpiresAt,
 		Path:    "/",
 	})
 }

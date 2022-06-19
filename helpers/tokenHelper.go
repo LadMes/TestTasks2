@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"context"
+
 	//"fmt"
 	"log"
 	"os"
@@ -30,13 +31,13 @@ func GenerateAllTokens(id uuid.UUID) (signedToken string, signedRefreshToken str
 	claims := &Claims{
 		ID: id,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(5 * time.Minute).Unix(),
+			ExpiresAt: time.Now().Add(models.AccessTokenMultiplier * time.Minute).Unix(),
 		},
 	}
 
 	refreshClaims := &Claims{
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(10 * time.Minute).Unix(),
+			ExpiresAt: time.Now().Add(models.RefreshTokenMultiplier * time.Minute).Unix(),
 		},
 	}
 
@@ -85,7 +86,7 @@ func UpdateRefreshToken(signedRefreshToken string, id uuid.UUID) {
 }
 
 func ValidateToken(signedToken string) (claims *Claims, msg string) {
-	token, _ := jwt.ParseWithClaims(
+	token, err := jwt.ParseWithClaims(
 		signedToken,
 		&Claims{},
 		func(token *jwt.Token) (interface{}, error) {
@@ -94,6 +95,10 @@ func ValidateToken(signedToken string) (claims *Claims, msg string) {
 	)
 
 	message := ""
+	if err != nil {
+		message = err.Error()
+		return nil, message
+	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
@@ -101,41 +106,9 @@ func ValidateToken(signedToken string) (claims *Claims, msg string) {
 		return nil, message
 	}
 
-	var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
-
-	var foundUser models.User
-	err := userCollection.FindOne(ctx, bson.M{"_id": claims.ID.String()}).Decode(&foundUser)
-	if err != nil {
-		message = "User with this ID doesn't exist"
-		return nil, message
-	}
-
-	refreshToken, err := jwt.ParseWithClaims(
-		foundUser.Refresh_token,
-		&Claims{},
-		func(token *jwt.Token) (interface{}, error) {
-			return []byte(SECRET_KEY), nil
-		},
-	)
-	if err != nil {
-		message = err.Error()
-		return nil, message
-	}
-
-	refreshClaims, ok := refreshToken.Claims.(*Claims)
-	if !ok {
-		message = models.InvalidToken
-		return nil, message
-	}
-
 	if claims.ExpiresAt < time.Now().Unix() {
-		if refreshClaims.ExpiresAt < time.Now().Unix() {
-			message = models.ExpiredAccessAndRefresh
-		} else {
-			message = models.ExpiredOnlyAccessToken
-		}
-	} else if claims.ExpiresAt >= time.Now().Unix() && time.Now().Unix()-claims.ExpiresAt < int64(time.Minute) {
+		message = models.ExpiredToken
+	} else if claims.ExpiresAt >= time.Now().Unix() && claims.ExpiresAt-time.Now().Unix() < int64(time.Minute/time.Second) {
 		message = models.TokenWillSoonExpire
 	}
 
