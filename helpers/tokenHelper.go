@@ -3,7 +3,6 @@ package helpers
 import (
 	"context"
 
-	//"fmt"
 	"log"
 	"os"
 	"time"
@@ -36,6 +35,7 @@ func GenerateAllTokens(id uuid.UUID) (signedToken string, signedRefreshToken str
 	}
 
 	refreshClaims := &Claims{
+		ID: id,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(models.RefreshTokenMultiplier * time.Minute).Unix(),
 		},
@@ -94,12 +94,11 @@ func ValidateToken(signedToken string) (claims *Claims, msg string) {
 		},
 	)
 
-	message := ""
 	if err != nil {
-		message = err.Error()
-		return nil, message
+		return nil, err.Error()
 	}
 
+	message := ""
 	claims, ok := token.Claims.(*Claims)
 	if !ok {
 		message = models.InvalidToken

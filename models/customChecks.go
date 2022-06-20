@@ -1,7 +1,7 @@
 package models
 
 const (
-	ExpiredToken        = "The token is expired"
+	ExpiredToken        = "The token expired"
 	InvalidToken        = "The token is invalid"
-	TokenWillSoonExpire = "The token will soon expire"
+	TokenWillSoonExpire = "The token will expire soon"
 )

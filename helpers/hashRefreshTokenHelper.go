@@ -11,7 +11,6 @@ func Hash(rt []byte) string {
 	if err != nil {
 		log.Println(err)
 	}
-	log.Println(string(hash))
 	return string(hash)
 }
 

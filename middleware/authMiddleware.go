@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	//"fmt"
-
 	"net/http"
 	"net/url"
 
@@ -17,7 +15,7 @@ func Authentication() gin.HandlerFunc {
 		accessCookie, err := c.Request.Cookie("token")
 		if err != nil {
 			location := url.URL{Path: "/auth/signin"}
-			c.Redirect(http.StatusUnauthorized, location.RequestURI())
+			c.Redirect(http.StatusFound, location.RequestURI())
 			c.Abort()
 			return
 		}
@@ -25,13 +23,20 @@ func Authentication() gin.HandlerFunc {
 		refreshCookie, err := c.Request.Cookie("refreshToken")
 		if err != nil {
 			location := url.URL{Path: "/auth/signin"}
-			c.Redirect(http.StatusUnauthorized, location.RequestURI())
+			c.Redirect(http.StatusFound, location.RequestURI())
 			c.Abort()
 			return
 		}
 
 		accessClaims, msg := helpers.ValidateToken(accessCookie.Value)
-		_, refMsg := helpers.ValidateToken(refreshCookie.Value)
+		refreshClaims, refMsg := helpers.ValidateToken(refreshCookie.Value)
+		var id string
+		if accessClaims != nil {
+			id = accessClaims.ID.String()
+		} else {
+			id = refreshClaims.ID.String()
+		}
+
 		if msg != "" {
 			if IsBothTokenExpired(msg, refMsg) {
 				location := url.URL{Path: "/auth/signin"}
@@ -39,8 +44,15 @@ func Authentication() gin.HandlerFunc {
 				c.Abort()
 				return
 			} else if IsRefreshTokenValid(refMsg) {
-				userInfoFromCookie := models.User{ID: accessClaims.ID.String(), Refresh_token: refreshCookie.Value}
-				controllers.Refresh(userInfoFromCookie, c)
+				userInfoFromCookie := models.User{
+					ID:            id,
+					Refresh_token: refreshCookie.Value,
+				}
+				err := controllers.Refresh(userInfoFromCookie, c)
+				if err != nil {
+					c.Abort()
+					return
+				}
 			} else {
 				c.JSON(http.StatusInternalServerError, gin.H{"error1": msg, "error2": refMsg})
 				c.Abort()
@@ -48,7 +60,7 @@ func Authentication() gin.HandlerFunc {
 			}
 		}
 
-		c.Set("id", accessClaims.ID)
+		c.Set("id", id)
 
 		c.Next()
 	}
