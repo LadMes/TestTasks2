@@ -80,7 +80,7 @@ func Refresh(userInfoFromCookie models.User, c *gin.Context) error {
 		return err
 	}
 
-	comparison := helpers.CompareRefreshTokens(foundUser.Refresh_token, []byte(userInfoFromCookie.Refresh_token))
+	comparison := helpers.CompareRefreshTokens(foundUser.RefreshToken, []byte(userInfoFromCookie.RefreshToken))
 	if !comparison {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh tokens are not the same"})
 	}

@@ -94,17 +94,12 @@ func ValidateToken(signedToken string) (claims *Claims, msg string) {
 		},
 	)
 
-	if err != nil {
-		return nil, err.Error()
+	claims, ok := token.Claims.(*Claims)
+	if err != nil || !ok {
+		return claims, models.InvalidToken
 	}
 
 	message := ""
-	claims, ok := token.Claims.(*Claims)
-	if !ok {
-		message = models.InvalidToken
-		return nil, message
-	}
-
 	if claims.ExpiresAt < time.Now().Unix() {
 		message = models.ExpiredToken
 	} else if claims.ExpiresAt >= time.Now().Unix() && claims.ExpiresAt-time.Now().Unix() < int64(time.Minute/time.Second) {

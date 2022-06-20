@@ -30,46 +30,49 @@ func Authentication() gin.HandlerFunc {
 
 		accessClaims, msg := helpers.ValidateToken(accessCookie.Value)
 		refreshClaims, refMsg := helpers.ValidateToken(refreshCookie.Value)
-		var id string
-		if accessClaims != nil {
-			id = accessClaims.ID.String()
-		} else {
-			id = refreshClaims.ID.String()
-		}
-
 		if msg != "" {
-			if IsBothTokenExpired(msg, refMsg) {
-				location := url.URL{Path: "/auth/signin"}
-				c.Redirect(http.StatusFound, location.RequestURI())
-				c.Abort()
-				return
-			} else if IsRefreshTokenValid(refMsg) {
-				userInfoFromCookie := models.User{
-					ID:            id,
-					Refresh_token: refreshCookie.Value,
-				}
-				err := controllers.Refresh(userInfoFromCookie, c)
-				if err != nil {
+			if isIdEqual(accessClaims.Id, refreshClaims.Id) {
+				if isBothTokenExpired(msg, refMsg) {
+					location := url.URL{Path: "/auth/signin"}
+					c.Redirect(http.StatusFound, location.RequestURI())
+					c.Abort()
+					return
+				} else if isRefreshTokenValid(refMsg) {
+					userInfoFromCookie := models.User{
+						ID:           accessClaims.ID.String(),
+						RefreshToken: refreshCookie.Value,
+					}
+					err := controllers.Refresh(userInfoFromCookie, c)
+					if err != nil {
+						c.Abort()
+						return
+					}
+				} else {
+					c.JSON(http.StatusInternalServerError, gin.H{"error1": msg, "error2": refMsg})
 					c.Abort()
 					return
 				}
 			} else {
-				c.JSON(http.StatusInternalServerError, gin.H{"error1": msg, "error2": refMsg})
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "You don't have access"})
 				c.Abort()
 				return
 			}
 		}
 
-		c.Set("id", id)
+		c.Set("id", accessClaims.ID.String())
 
 		c.Next()
 	}
 }
 
-func IsBothTokenExpired(acsMsg string, refMsg string) bool {
+func isIdEqual(accessId string, refreshId string) bool {
+	return accessId == refreshId
+}
+
+func isBothTokenExpired(acsMsg string, refMsg string) bool {
 	return acsMsg == models.ExpiredToken && refMsg == models.ExpiredToken
 }
 
-func IsRefreshTokenValid(refMsg string) bool {
+func isRefreshTokenValid(refMsg string) bool {
 	return refMsg == models.TokenWillSoonExpire || refMsg == ""
 }
