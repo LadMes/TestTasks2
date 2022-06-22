@@ -1,10 +1,13 @@
 package middleware
 
 import (
+	"bytes"
+	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 
-	"github.com/LadMes/TestTasks2/controllers"
 	"github.com/LadMes/TestTasks2/helpers"
 	"github.com/LadMes/TestTasks2/models"
 	"github.com/gin-gonic/gin"
@@ -38,12 +41,31 @@ func Authentication() gin.HandlerFunc {
 					c.Abort()
 					return
 				} else if isRefreshTokenValid(refMsg) {
-					userInfoFromCookie := models.User{
-						ID:           accessClaims.ID.String(),
-						RefreshToken: refreshCookie.Value,
-					}
-					err := controllers.Refresh(userInfoFromCookie, c)
+					refreshUrl := fmt.Sprintf("http://localhost:%s/auth/refresh", os.Getenv("PORT"))
+					jsonString := fmt.Sprintf(`{"id": "%s", "refreshToken": "%s"}`, accessClaims.ID.String(), refreshCookie.Value)
+					jsonBody := []byte(jsonString)
+					bodyReader := bytes.NewReader(jsonBody)
+					req, err := http.NewRequest(http.MethodPost, refreshUrl, bodyReader)
 					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+						c.Abort()
+						return
+					}
+					res, err := http.DefaultClient.Do(req)
+					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+						c.Abort()
+						return
+					}
+					body, err := ioutil.ReadAll(res.Body)
+					if err != nil {
+						c.JSON(http.StatusInternalServerError, gin.H{"error": err})
+						c.Abort()
+						return
+					}
+					if len(body) != 0 {
+						location := url.URL{Path: "/auth/signin"}
+						c.Redirect(http.StatusFound, location.RequestURI())
 						c.Abort()
 						return
 					}

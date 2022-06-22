@@ -69,32 +69,40 @@ func SignIn() gin.HandlerFunc {
 	}
 }
 
-func Refresh(userInfoFromCookie models.User, c *gin.Context) error {
-	var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
+func Refresh() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		defer cancel()
 
-	var foundUser models.User
-	err := userCollection.FindOne(ctx, bson.M{"_id": userInfoFromCookie.ID}).Decode(&foundUser)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User with this ID doesn't exist"})
-		return err
+		var user models.User
+		if err := c.BindJSON(&user); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var foundUser models.User
+		err := userCollection.FindOne(ctx, bson.M{"_id": user.ID}).Decode(&foundUser)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User with this ID doesn't exist"})
+			return
+		}
+
+		comparison := helpers.CompareRefreshTokens(foundUser.RefreshToken, []byte(user.RefreshToken))
+		if !comparison {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh tokens are not the same"})
+			return
+		}
+
+		userID, err := uuid.Parse(foundUser.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		token, refreshToken := helpers.GenerateAllTokens(userID)
+		helpers.UpdateRefreshToken(helpers.Hash([]byte(refreshToken)), userID)
+
+		SetAllCookies(c, token, refreshToken)
 	}
-
-	comparison := helpers.CompareRefreshTokens(foundUser.RefreshToken, []byte(userInfoFromCookie.RefreshToken))
-	if !comparison {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Refresh tokens are not the same"})
-	}
-
-	userID, err := uuid.Parse(foundUser.ID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return err
-	}
-	token, refreshToken := helpers.GenerateAllTokens(userID)
-	helpers.UpdateRefreshToken(helpers.Hash([]byte(refreshToken)), userID)
-
-	SetAllCookies(c, token, refreshToken)
-	return nil
 }
 
 func SetAllCookies(c *gin.Context, token string, refreshToken string) {
